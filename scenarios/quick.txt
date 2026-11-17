@@ -1,0 +1,3 @@
+# Short outage for a quick check of the real-time loop.
+2   mains-off
+9   mains-on

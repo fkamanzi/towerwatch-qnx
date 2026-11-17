@@ -1,0 +1,6 @@
+# A mains outage on a site whose generator does not start.
+# seconds  fault
+10   mains-off
+10   gen-no-start
+60   gen-ok
+100  mains-on

@@ -1,0 +1,8 @@
+# towerwatch for a QNX 8.0 boot image.
+# Add these lines to your target's buildfile (for example the one generated
+# for the QEMU x86_64 target in the QNX SDP 8.0 Quick Start), adjust the
+# architecture directory if needed, and rebuild the image with mkifs.
+[perms=0755] /usr/bin/towerwatch=build/qnx/gcc_ntox86_64/towerwatch
+[perms=0755] /usr/bin/pwrsim=build/qnx/gcc_ntox86_64/pwrsim
+[perms=0755] /usr/bin/pwrctl=build/qnx/gcc_ntox86_64/pwrctl
+[perms=0644] /etc/towerwatch/outage.txt=scenarios/outage.txt
