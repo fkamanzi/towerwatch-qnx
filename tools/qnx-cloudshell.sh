@@ -10,7 +10,7 @@
 #                                          installs QNX Software Center and QNX SDP 8.0
 #   bash tools/qnx-cloudshell.sh build     builds towerwatch, pwrsim, pwrctl with qcc
 #   bash tools/qnx-cloudshell.sh image     QNX 8.0 x86_64 VM image with mkqnximage
-#   bash tools/qnx-cloudshell.sh boot      boots it in QEMU (TCG, no KVM needed), waits for ssh
+#   bash tools/qnx-cloudshell.sh boot      boots it in QEMU (TCG, no KVM or bridge needed), waits for ssh
 #   bash tools/qnx-cloudshell.sh run       copies towerwatch to the target and runs the demo
 #   bash tools/qnx-cloudshell.sh all       build, image, boot, run
 #   bash tools/qnx-cloudshell.sh stop      stops the VM
@@ -168,29 +168,42 @@ image() {
     ls -l output
 }
 
+# mkqnximage --run needs a host network bridge (brctl, br0 or virbr0) and uses
+# KVM when it can; Cloud Shell has neither. So start the same QEMU command that
+# mkqnximage's runimage builds for an x86_64, non-UEFI image (IDE disk,
+# virtio-net, virtio-rng, -kernel ifs.bin, serial console to a file), with TCG
+# emulation and user-mode networking: the target's ssh port on 127.0.0.1:2222.
+opt() { sed -n "s/^OPT_$1='\(.*\)'$/\1/p" "$VM_DIR/output/options" | head -1; }
+
 boot() {
     ensure_setup
-    sdp_env
     cd "$VM_DIR"
     if qssh true 2>/dev/null; then say "QNX is already running"; return 0; fi
-    export PATH="$REPO_DIR/tools/qemu-tcg:$PATH" QEMU_CMD_LOG="$VM_DIR/output/qemu.cmd"
+    local cpus ram mac
+    cpus=$(opt CPU); ram=$(opt RAM); mac=$(opt MACADDR)
+    local cmd=(qemu-system-x86_64 -smp "${cpus:-2}" -cpu max -m "${ram:-1G}"
+        -drive file=output/disk-qemu.vmdk,if=ide,id=drv0
+        -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
+        -device "virtio-net-pci,netdev=net0${mac:+,mac=$mac}"
+        -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0
+        -kernel output/ifs.bin -serial file:output/qemu.out
+        -display none -monitor none -pidfile output/qemu.pid -daemonize)
+    printf '%q ' "${cmd[@]}" > output/qemu.cmd
     say "Booting QNX 8.0 in QEMU (headless, emulated CPU)"
-    nohup mkqnximage --run=-h > "$VM_DIR/output/run.log" 2>&1 &
+    cat output/qemu.cmd; echo
+    "${cmd[@]}"
     local i
-    for i in $(seq 1 120); do
+    for i in $(seq 1 60); do
         sleep 5
         if qssh true 2>/dev/null; then
-            say "QNX is up after $((i * 5)) s"
-            echo "QEMU command: $(cat "$QEMU_CMD_LOG" 2>/dev/null)"
+            say "QNX is up after about $((i * 5)) s"
             qssh 'uname -a'
             return 0
         fi
-        [ $((i % 6)) -eq 0 ] && echo "  still booting ($((i * 5)) s)"
+        [ $((i % 6)) -eq 0 ] && echo "  still booting; console: $(tail -c 300 output/qemu.out | tr -s '\r\n' ' ' | tail -c 120)"
     done
-    echo "No ssh after 10 min. mkqnximage said:"
-    tail -20 "$VM_DIR/output/run.log" || true
-    echo "Console:"
-    tail -40 "$VM_DIR/output/qemu.out" 2>/dev/null || true
+    echo "No ssh yet. Console:"
+    tail -40 output/qemu.out || true
     return 1
 }
 
@@ -230,8 +243,7 @@ run_demo() {
 }
 
 stop_vm() {
-    sdp_env
-    cd "$VM_DIR" && mkqnximage --stop || true
+    [ -f "$VM_DIR/output/qemu.pid" ] && kill "$(cat "$VM_DIR/output/qemu.pid")" 2>/dev/null && echo "QEMU stopped" || echo "QEMU not running"
 }
 
 status() {

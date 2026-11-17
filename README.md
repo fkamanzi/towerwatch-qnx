@@ -25,7 +25,7 @@ In the same simulated outage (mains lost at 10 s, generator fails to start until
 | Tick execution time | `ClockCycles()`, `SYSPAGE_ENTRY(qtime)->cycles_per_sec` | `src/towerwatch.c`, `work_clock()`, `work_to_ns()` |
 | Real-time scheduling | `SCHED_FIFO` thread at priority 40, `mlockall()` | `src/towerwatch.c`, `main()` |
 | The plant as a driver-style process | resource manager at `/dev/pwrsim`: `resmgr_attach`, `iofunc_func_init`, `io_read`, `io_devctl` | `src/pwrsim.c` |
-| Monitor to plant over message passing | `pread()` and `devctl(DCMD_PWRSIM_CMD / DCMD_PWRSIM_FAULT)` on `/dev/pwrsim` | `towerwatch -R`, `src/pwrctl.c` |
+| Monitor to plant over message passing | `read()` and `devctl(DCMD_PWRSIM_CMD / DCMD_PWRSIM_FAULT)` on `/dev/pwrsim` | `towerwatch -R`, `src/pwrctl.c` |
 | System logging | `slog2_register`, `slog2f` (read with `slog2info`) | `src/towerwatch.c`, `log_event()` |
 | Build | `qcc -Vgcc_ntox86_64` (QEMU, PC) or `-Vgcc_ntoaarch64le` (Raspberry Pi 5) | `Makefile`, `make qnx` |
 | Image | buildfile lines for the binaries and the scenario | `image/towerwatch.build` |
@@ -59,6 +59,20 @@ slog2info                                 # towerwatch events in the system log
 ```
 
 To add the binaries to a boot image instead, include the lines in `image/towerwatch.build` in your target's buildfile.
+
+### With only a browser: Google Cloud Shell
+
+No QNX host or target at hand? `tools/qnx-cloudshell.sh` does the whole route in Google Cloud Shell (Ubuntu 24.04, free with a Google account), following QNX's documented unattended installation:
+
+```sh
+git clone https://github.com/fkamanzi/towerwatch-qnx && cd towerwatch-qnx
+bash tools/qnx-cloudshell.sh install   # asks for your myQNX email and password once; QNX Software Center + QNX SDP 8.0
+bash tools/qnx-cloudshell.sh all       # qcc build, mkqnximage QEMU image, boot, copy, run the demo
+```
+
+`install` activates the QNX Everywhere licence deployed to your myQNX account (`qnxsoftwarecenter_clt -syncLicenseKeys -activateAll`) and installs the `com.qnx.qnx800` baseline. `image` builds a QNX 8.0 x86_64 VM image with `mkqnximage --type=qemu`. `mkqnximage --run` needs a host network bridge (`brctl`, `br0` or `virbr0`) and uses KVM when it can; Cloud Shell has neither, so `boot` starts the same QEMU command that mkqnximage's `runimage` builds for an x86_64 image (IDE disk, virtio-net, virtio-rng, `-kernel ifs.bin`) with TCG emulation and user-mode networking, ssh on `127.0.0.1:2222`. `run` copies the binaries over ssh and runs the three demo runs below, saving the output in `/tmp/qnx/results`.
+
+The emulated CPU shows the software working on QNX 8.0; its timing figures are emulation figures, not what QNX does on real hardware. For timing, run the same commands on a Raspberry Pi 5 or a PC with QNX 8.0.
 
 ## Build and test on a Linux host
 
