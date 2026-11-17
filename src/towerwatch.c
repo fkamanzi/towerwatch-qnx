@@ -365,7 +365,11 @@ static void *sampler(void *arg)
 #ifdef __QNX__
     /* Periodic kernel timer delivering a pulse to a private channel. */
     enum { PULSE_TICK = _PULSE_CODE_MINAVAIL };
-    int chid = ChannelCreate(_NTO_CHF_PRIVATE);
+#ifdef _NTO_CHF_PRIVATE
+    int chid = ChannelCreate(_NTO_CHF_PRIVATE);   /* no other process can connect */
+#else
+    int chid = ChannelCreate(0);
+#endif
     int coid = ConnectAttach(0, 0, chid, _NTO_SIDE_CHANNEL, 0);
     if (chid == -1 || coid == -1) { perror("ChannelCreate/ConnectAttach"); stop_flag = 1; return NULL; }
     struct sigevent sev;

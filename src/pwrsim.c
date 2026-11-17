@@ -91,7 +91,11 @@ static void *stepper(void *arg)
 {
     (void)arg;
     enum { PULSE_TICK = _PULSE_CODE_MINAVAIL };
-    int chid = ChannelCreate(_NTO_CHF_PRIVATE);
+#ifdef _NTO_CHF_PRIVATE
+    int chid = ChannelCreate(_NTO_CHF_PRIVATE);   /* no other process can connect */
+#else
+    int chid = ChannelCreate(0);
+#endif
     int coid = ConnectAttach(0, 0, chid, _NTO_SIDE_CHANNEL, 0);
     struct sigevent sev;
     SIGEV_PULSE_INIT(&sev, coid, SIGEV_PULSE_PRIO_INHERIT, PULSE_TICK, 0);
