@@ -56,8 +56,8 @@ setup() {
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 qemu-utils mtools dosfstools >/dev/null
     mkdir -p "$WORK"
     # QNX tools keep their cache and licence data in ~/.qnx; put it on the larger disk.
+    mkdir -p "$WORK/dot-qnx"
     if [ ! -L "$HOME/.qnx" ]; then
-        mkdir -p "$WORK/dot-qnx"
         [ -d "$HOME/.qnx" ] && cp -a "$HOME/.qnx/." "$WORK/dot-qnx/" && rm -rf "$HOME/.qnx"
         ln -s "$WORK/dot-qnx" "$HOME/.qnx"
     fi
@@ -65,9 +65,18 @@ setup() {
     df -h /tmp | tail -1
 }
 
+# Cloud Shell recycles its VM after a while idle: system packages and /tmp go,
+# $HOME stays. Re-run setup whenever QEMU or the /tmp side of ~/.qnx is missing.
+ensure_setup() {
+    if ! command -v qemu-system-x86_64 >/dev/null || [ ! -d "$WORK/dot-qnx" ] || [ ! -L "$HOME/.qnx" ]; then
+        rm -f "$HOME/.qnx" 2>/dev/null || true
+        setup
+    fi
+}
+
 install_qnx() {
     mkdir -p "$WORK"
-    [ -L "$HOME/.qnx" ] || setup
+    ensure_setup
     read -r -p "myQNX email: " MYQNX_USER
     read -r -s -p "myQNX password (not shown): " MYQNX_PASSWORD
     echo
@@ -131,6 +140,7 @@ image() {
 }
 
 boot() {
+    ensure_setup
     sdp_env
     cd "$VM_DIR"
     if qssh true 2>/dev/null; then say "QNX is already running"; return 0; fi
