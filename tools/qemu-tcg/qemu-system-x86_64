@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# QEMU wrapper for hosts with no KVM and no network bridge (Google Cloud Shell).
+#
+# mkqnximage --run starts QEMU with KVM and a bridged network (br0). This
+# wrapper keeps every other argument and swaps those two parts: TCG
+# emulation instead of KVM, user-mode networking instead of the bridge, with
+# the target's ssh port forwarded to 127.0.0.1:${QNX_SSH_PORT:-2222}.
+# Put its directory first in PATH before running mkqnximage --run.
+# SPDX-License-Identifier: Apache-2.0
+real=${QEMU_REAL:-/usr/bin/qemu-system-x86_64}
+fwd="hostfwd=tcp:127.0.0.1:${QNX_SSH_PORT:-2222}-:22"
+out=()
+prev=
+have_cpu=0
+for a in "$@"; do
+    case "$prev" in
+        -netdev)
+            if [[ $a == bridge* || $a == tap* ]]; then
+                id=$(sed -n 's/.*id=\([^,]*\).*/\1/p' <<<"$a")
+                a="user,id=${id:-net0},$fwd"
+            fi ;;
+        -nic|-net)
+            if [[ $a == bridge* || $a == tap* ]]; then
+                a=$(sed -e 's/^[a-z]*/user/' -e 's/,br=[^,]*//' -e 's/,ifname=[^,]*//' -e 's/,script=[^,]*//' \
+                        -e 's/,downscript=[^,]*//' <<<"$a"),$fwd
+            fi ;;
+        -cpu) have_cpu=1; [[ $a == host* ]] && a=max ;;
+        -accel) [[ $a == kvm* ]] && a=tcg ;;
+        -machine|-M) a=${a//accel=kvm:tcg/accel=tcg}; a=${a//accel=kvm/accel=tcg} ;;
+    esac
+    prev=$a
+    case "$a" in
+        -enable-kvm|--enable-kvm) continue ;;
+    esac
+    out+=("$a")
+done
+[ "$have_cpu" = 1 ] || out+=(-cpu max)
+if [ -n "${QEMU_CMD_LOG:-}" ]; then
+    printf '%q ' "$real" "${out[@]}" > "$QEMU_CMD_LOG"
+    echo >> "$QEMU_CMD_LOG"
+fi
+exec "$real" "${out[@]}"

@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sched.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -49,7 +50,8 @@ static int io_read(resmgr_context_t *ctp, io_read_t *msg, RESMGR_OCB_T *ocb)
 {
     int status = iofunc_read_verify(ctp, msg, ocb, NULL);
     if (status != EOK) return status;
-    if ((msg->i.xtype & _IO_XTYPE_MASK) != _IO_XTYPE_NONE) return ENOSYS;
+    int xtype = msg->i.xtype & _IO_XTYPE_MASK;     /* read() and pread() both welcome */
+    if (xtype != _IO_XTYPE_NONE && xtype != _IO_XTYPE_OFFSET) return ENOSYS;
 
     struct plant_sample s;
     plant_snapshot(&s);
@@ -101,9 +103,11 @@ static void *stepper(void *arg)
     SIGEV_PULSE_INIT(&sev, coid, SIGEV_PULSE_PRIO_INHERIT, PULSE_TICK, 0);
     timer_t tid;
     if (timer_create(CLOCK_MONOTONIC, &sev, &tid) == -1) { perror("timer_create"); exit(1); }
-    long period = 1000000000L / rate_hz;
-    struct itimerspec its = { { 0, period }, { 0, period } };
-    timer_settime(tid, 0, &its, NULL);
+    uint64_t period = 1000000000ull / (uint64_t)rate_hz;
+    struct itimerspec its;
+    its.it_value.tv_sec = its.it_interval.tv_sec = (time_t)(period / 1000000000ull);
+    its.it_value.tv_nsec = its.it_interval.tv_nsec = (long)(period % 1000000000ull);
+    if (timer_settime(tid, 0, &its, NULL) == -1) { perror("timer_settime"); exit(1); }
     for (;;) {
         struct _pulse p;
         if (MsgReceivePulse(chid, &p, sizeof p, NULL) == -1) continue;

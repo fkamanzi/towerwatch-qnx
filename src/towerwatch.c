@@ -190,7 +190,7 @@ static void read_plant(uint64_t now, struct plant_sample *s)
 {
 #ifdef __QNX__
     if (opt.resmgr) {
-        if (pread(plant_fd, s, sizeof *s, 0) != (ssize_t)sizeof *s) memset(s, 0, sizeof *s);
+        if (read(plant_fd, s, sizeof *s) != (ssize_t)sizeof *s) memset(s, 0, sizeof *s);
         return;
     }
 #endif
@@ -421,6 +421,22 @@ static void *sampler(void *arg)
     return NULL;
 }
 
+/* One line, log-spaced buckets: enough to chart the latency distribution. */
+static void print_histogram(void)
+{
+    static const unsigned edge[] = { 10, 20, 50, 100, 200, 500, 1000, 2000 };
+    static const char *label[] = { "<10", "10-20", "20-50", "50-100", "100-200", "200-500",
+                                   "500-1000", "1000-2000", ">=2000" };
+    uint64_t count[9] = { 0 };
+    for (unsigned i = 0; i < LAT_BUCKETS; i++) {
+        unsigned b = 0;
+        while (b < 8 && i >= edge[b]) b++;
+        count[b] += stats.hist[i];
+    }
+    printf("latency histogram (us):");
+    for (unsigned b = 0; b < 9; b++) printf(" %s %" PRIu64 "%s", label[b], count[b], b < 8 ? " |" : "\n");
+}
+
 static void summary(void)
 {
     struct plant_sample s;
@@ -437,6 +453,7 @@ static void summary(void)
                stats.n ? (double)stats.sum_ns / (double)stats.n / 1000.0 : 0.0,
                percentile_us(&stats, 0.99), percentile_us(&stats, 0.999), (double)stats.max_ns / 1000.0);
         printf("tick work: max %.1f us\n", (double)stats.work_max_ns / 1000.0);
+        print_histogram();
     }
     if (ps.detections)
         printf("mains failures detected: %u, worst detection %.3f ms after the fault\n",
