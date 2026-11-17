@@ -179,9 +179,10 @@ boot() {
     ensure_setup
     cd "$VM_DIR"
     if qssh true 2>/dev/null; then say "QNX is already running"; return 0; fi
+    [ -f output/qemu.pid ] && kill "$(cat output/qemu.pid)" 2>/dev/null && sleep 1
     local cpus ram mac
     cpus=$(opt CPU); ram=$(opt RAM); mac=$(opt MACADDR)
-    local cmd=(qemu-system-x86_64 -smp "${cpus:-2}" -cpu max -m "${ram:-1G}"
+    local cmd=(qemu-system-x86_64 -smp "${cpus:-2}" -cpu "${QNX_QEMU_CPU:-Nehalem}" -m "${ram:-1G}"
         -drive file=output/disk-qemu.vmdk,if=ide,id=drv0
         -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
         -device "virtio-net-pci,netdev=net0${mac:+,mac=$mac}"
