@@ -251,6 +251,17 @@ logs() {
     ls -l "$RES_DIR"
 }
 
+# One line per run, one sample per second (t, bus V, state of charge %, site up,
+# source G/B/D): small enough to read off the terminal and chart elsewhere.
+series() {
+    local f
+    for f in protect observe; do
+        echo "$f:"
+        awk -F, '$1 ~ /\.0$/ { printf "%d %.1f %.0f %d %s|", $1, $3, $4 * 100, $11, substr($2, 1, 1) }' "$RES_DIR/$f.csv"
+        echo
+    done
+}
+
 stop_vm() {
     [ -f "$VM_DIR/output/qemu.pid" ] && kill "$(cat "$VM_DIR/output/qemu.pid")" 2>/dev/null && echo "QEMU stopped" || echo "QEMU not running"
 }
@@ -273,6 +284,7 @@ case "${1:-status}" in
     boot) boot ;;
     run) run_demo ;;
     logs) logs ;;
+    series) series ;;
     all) build && image && boot && run_demo ;;
     stop) stop_vm ;;
     status) status ;;
