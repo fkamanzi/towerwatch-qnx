@@ -8,6 +8,23 @@ Telecom towers run on a −48 V DC power plant: mains, a standby diesel generato
 
 In the same simulated outage (mains lost at 10 s, generator fails to start until it is repaired at 60 s, mains back at 100 s), monitoring alone lets the battery run flat and the site goes down for 32 s. With towerwatch in control the site stays on air the whole time. Category: **Robotics & Medical** (real-time applications where timing and reliability are critical).
 
+## Results on QNX 8.0
+
+Recorded on 17 November 2026 on QNX 8.0.0 x86_64: the `mkqnximage` QEMU image with 2 emulated CPUs (TCG, IvyBridge model, no KVM) in Google Cloud Shell, built and run with `tools/qnx-cloudshell.sh all`. Same outage as above, once with towerwatch in control and once observing only.
+
+![Same outage, recorded on QNX 8.0](docs/qnx/outage_qnx.png)
+
+| On QNX 8.0 | towerwatch in control | observe only |
+| --- | --- | --- |
+| Mains failure declared | 4.002 ms after the fault | 4.048 ms after the fault |
+| Site downtime | none: the site stayed up | 31.6 s (battery disconnect) |
+| Ticks run / whole periods skipped (110 s at 1 kHz) | 105,406 / 4,594 | 106,529 / 3,471 |
+| Wake-up latency: mean / p99 / max | 244 µs / 787 µs / 1,000 µs | 90 µs / 688 µs / 1,000 µs |
+
+With the plant as a separate process (`pwrsim` at `/dev/pwrsim`, `towerwatch -R` reading it over QNX message passing and injecting faults with `devctl`), the mains failure was declared 21.3 ms after the fault: two processes, each on its own 1 kHz timer, on an emulated CPU. The generator start request, the mains return and every alarm show up in the QNX system log through `slog2info`. Per-second samples of both outage runs are in `docs/qnx/series_qemu.txt`; `docs/qnx/make_qnx_chart.py` draws the chart.
+
+Timing caveat: QEMU's TCG emulates the CPU here, so latency and skipped periods measure the emulator, not QNX. A wake-up more than one period late is counted as skipped periods, which is why the maximum latency reads 1,000 µs. The control results (detection 4 ms after the fault, load shed on generator failure, generator retry, no downtime) match the host simulation (4.000 ms; 0 s against 32.4 s). For timing figures, run the same commands on a Raspberry Pi 5 or a PC with QNX 8.0.
+
 ## What it does
 
 - Samples mains and generator voltage, DC bus voltage, battery current and charge, rectifier modules, loads and cabinet temperature at a fixed rate (default 1 kHz).
