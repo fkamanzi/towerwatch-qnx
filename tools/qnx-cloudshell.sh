@@ -74,41 +74,63 @@ ensure_setup() {
     fi
 }
 
+# Runs one QNX Software Center step from its install directory, as QNX's
+# instructions say. If the step fails, the credentials stay in this process
+# and the script waits: fix the cause from another terminal, then press Enter
+# to retry (or type s and Enter to skip), without typing the password again.
+qsc_step() {
+    local label=$1 reply
+    shift
+    say "$label"
+    until (cd "$QSC_DIR/qnxsoftwarecenter" && "$@"); do
+        echo "!! '$label' failed. Fix the cause, then press Enter to retry, or type s and Enter to skip."
+        read -r reply
+        [ "$reply" = s ] && return 0
+    done
+}
+
 install_qnx() {
     mkdir -p "$WORK"
     ensure_setup
     read -r -p "myQNX email: " MYQNX_USER
     read -r -s -p "myQNX password (not shown): " MYQNX_PASSWORD
     echo
-    local jar="$WORK/myqnxcookies.auth"
-
-    say "Signing in to myQNX"
-    curl -s --cookie-jar "$jar" --form "userlogin=$MYQNX_USER" --form "password=$MYQNX_PASSWORD" \
-        -X POST https://www.qnx.com/account/login.html -o "$WORK/login_response.html"
-
-    say "Downloading QNX Software Center"
-    curl -s -L --cookie "$jar" "$QSC_URL" -o "$WORK/qnx-setup-lin.run"
-    rm -f "$jar" "$WORK/login_response.html"
-    if ! head -c 2 "$WORK/qnx-setup-lin.run" | grep -q '#!'; then
-        echo "The download is not the installer (wrong email or password, or the licence is not deployed yet)."
-        exit 1
-    fi
-    ls -l "$WORK/qnx-setup-lin.run"
-    chmod a+x "$WORK/qnx-setup-lin.run"
-
-    say "Installing QNX Software Center (unattended)"
-    "$WORK/qnx-setup-lin.run" force-override disable-auto-start agree-to-license-terms "$QSC_DIR"
     local clt="$QSC_DIR/qnxsoftwarecenter/qnxsoftwarecenter_clt"
 
-    say "Activating the licence deployed to your myQNX account"
-    "$clt" -syncLicenseKeys -myqnx.user="$MYQNX_USER" -myqnx.password="$MYQNX_PASSWORD" -listLicenseKeys
+    if [ ! -x "$clt" ]; then
+        local jar="$WORK/myqnxcookies.auth"
+        say "Signing in to myQNX"
+        curl -s --cookie-jar "$jar" --form "userlogin=$MYQNX_USER" --form "password=$MYQNX_PASSWORD" \
+            -X POST https://www.qnx.com/account/login.html -o "$WORK/login_response.html"
 
-    say "Installing QNX SDP 8.0 (several GB, takes a while)"
-    "$clt" -mirror -myqnx.user="$MYQNX_USER" -myqnx.password="$MYQNX_PASSWORD"
-    "$clt" -cleanInstall -destination "$SDP_DIR" -installBaseline com.qnx.qnx800 \
-        -myqnx.user="$MYQNX_USER" -myqnx.password="$MYQNX_PASSWORD"
-    unset MYQNX_PASSWORD
+        say "Downloading QNX Software Center"
+        curl -s -L --cookie "$jar" "$QSC_URL" -o "$WORK/qnx-setup-lin.run"
+        rm -f "$jar" "$WORK/login_response.html"
+        if ! head -c 2 "$WORK/qnx-setup-lin.run" | grep -q '#!'; then
+            echo "The download is not the installer (wrong email or password, or the licence is not deployed yet)."
+            exit 1
+        fi
+        ls -l "$WORK/qnx-setup-lin.run"
+        chmod a+x "$WORK/qnx-setup-lin.run"
+
+        say "Installing QNX Software Center (unattended)"
+        "$WORK/qnx-setup-lin.run" force-override disable-auto-start agree-to-license-terms "$QSC_DIR"
+    else
+        say "QNX Software Center already installed in $QSC_DIR"
+    fi
+
+    local cred=(-myqnx.user="$MYQNX_USER" -myqnx.password="$MYQNX_PASSWORD")
+    # One licence is deployed to the account, so -activateAll activates it
+    # without typing the key (QNX's unattended-installation instructions).
+    qsc_step "Activating the licence deployed to your myQNX account" \
+        "$clt" -syncLicenseKeys "${cred[@]}" -activateAll -listLicenseKeys
+    qsc_step "Mirroring QNX package metadata" "$clt" -mirror "${cred[@]}"
+    qsc_step "Installing QNX SDP 8.0 (several GB, takes a while)" \
+        "$clt" -cleanInstall -destination "$SDP_DIR" -installBaseline com.qnx.qnx800 "${cred[@]}"
+    unset MYQNX_PASSWORD cred
     ls "$SDP_DIR"
+    du -sh "$SDP_DIR" "$WORK/dot-qnx" 2>/dev/null || true
+    df -h /tmp | tail -1
     say "QNX SDP 8.0 installed in $SDP_DIR"
 }
 
