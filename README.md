@@ -42,6 +42,8 @@ make qnx                                  # x86_64 target (QEMU or PC)
 make qnx QARCH=gcc_ntoaarch64le           # Raspberry Pi 5
 ```
 
+Or build on QNX itself: on the QNX Developer Desktop (the self-hosted QNX 8.0 image for QEMU), clone this repository and run `make native`; the binaries land in `build/native/`.
+
 Copy `build/qnx/<arch>/towerwatch`, `pwrsim`, `pwrctl` and `scenarios/outage.txt` to the target (for example with `scp`), then on the target:
 
 ```sh
