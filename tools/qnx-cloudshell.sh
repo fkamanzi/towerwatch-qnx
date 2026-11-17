@@ -172,7 +172,9 @@ image() {
 # KVM when it can; Cloud Shell has neither. So start the same QEMU command that
 # mkqnximage's runimage builds for an x86_64, non-UEFI image (IDE disk,
 # virtio-net, virtio-rng, -kernel ifs.bin, serial console to a file), with TCG
-# emulation and user-mode networking: the target's ssh port on 127.0.0.1:2222.
+# emulation and user-mode networking: the target's ssh port on 127.0.0.1:10022.
+# CPU model: QNX 8.0 does not start on QEMU's Nehalem model, and with -cpu max
+# its sshd crashes under TCG; IvyBridge boots in about 10 s with ssh working.
 opt() { sed -n "s/^OPT_$1='\(.*\)'$/\1/p" "$VM_DIR/output/options" | head -1; }
 
 boot() {
@@ -182,7 +184,7 @@ boot() {
     [ -f output/qemu.pid ] && kill "$(cat output/qemu.pid)" 2>/dev/null && sleep 1
     local cpus ram mac
     cpus=$(opt CPU); ram=$(opt RAM); mac=$(opt MACADDR)
-    local cmd=(qemu-system-x86_64 -smp "${cpus:-2}" -cpu "${QNX_QEMU_CPU:-Nehalem}" -m "${ram:-1G}"
+    local cmd=(qemu-system-x86_64 -smp "${cpus:-2}" -cpu "${QNX_QEMU_CPU:-IvyBridge}" -m "${ram:-1G}"
         -drive file=output/disk-qemu.vmdk,if=ide,id=drv0
         -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22"
         -device "virtio-net-pci,netdev=net0${mac:+,mac=$mac}"
