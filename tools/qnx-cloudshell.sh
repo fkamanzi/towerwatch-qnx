@@ -55,21 +55,28 @@ setup() {
     sudo apt-get update -qq
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq qemu-system-x86 qemu-utils mtools dosfstools >/dev/null
     mkdir -p "$WORK"
-    # QNX tools keep their cache and licence data in ~/.qnx; put it on the larger disk.
-    mkdir -p "$WORK/dot-qnx"
-    if [ ! -L "$HOME/.qnx" ]; then
-        [ -d "$HOME/.qnx" ] && cp -a "$HOME/.qnx/." "$WORK/dot-qnx/" && rm -rf "$HOME/.qnx"
-        ln -s "$WORK/dot-qnx" "$HOME/.qnx"
-    fi
+    qnx_home
     qemu-system-x86_64 --version | head -1
     df -h /tmp | tail -1
 }
 
-# Cloud Shell recycles its VM after a while idle: system packages and /tmp go,
-# $HOME stays. Re-run setup whenever QEMU or the /tmp side of ~/.qnx is missing.
+# QNX Software Center keeps its licences and package cache in ~/.qnx and
+# refuses a symlink there ("Cannot create ~/.qnx"). Cloud Shell's home disk is
+# small, so bind-mount a directory from the larger /tmp disk onto ~/.qnx.
+qnx_home() {
+    mkdir -p "$WORK/dot-qnx"
+    [ -L "$HOME/.qnx" ] && rm -f "$HOME/.qnx"
+    mkdir -p "$HOME/.qnx"
+    if ! mountpoint -q "$HOME/.qnx"; then
+        cp -a "$HOME/.qnx/." "$WORK/dot-qnx/" 2>/dev/null || true
+        sudo mount --bind "$WORK/dot-qnx" "$HOME/.qnx" || echo "note: no bind mount, ~/.qnx stays on the home disk"
+    fi
+}
+
+# Cloud Shell recycles its VM after a while idle: system packages, mounts and
+# /tmp go, $HOME stays. Re-run setup whenever QEMU or the ~/.qnx mount is missing.
 ensure_setup() {
-    if ! command -v qemu-system-x86_64 >/dev/null || [ ! -d "$WORK/dot-qnx" ] || [ ! -L "$HOME/.qnx" ]; then
-        rm -f "$HOME/.qnx" 2>/dev/null || true
+    if ! command -v qemu-system-x86_64 >/dev/null || ! mountpoint -q "$HOME/.qnx"; then
         setup
     fi
 }
