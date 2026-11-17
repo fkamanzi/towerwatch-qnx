@@ -233,14 +233,20 @@ run_demo() {
     qssh '/tmp/pwrsim -m > /tmp/pwrsim.log 2>&1 & sleep 2; ls -l /dev/pwrsim; /tmp/pwrctl status;
           (sleep 4; /tmp/pwrctl status; sleep 6; /tmp/pwrctl status) &
           /tmp/towerwatch -R -m -r 1000 -d 14 -s /tmp/quick.txt; /tmp/pwrctl status;
-          pidin -p pwrsim 2>/dev/null | head -8; slay -f pwrsim 2>/dev/null' \
+          pidin -p pwrsim 2>/dev/null | head -8; slay -f pwrsim >/dev/null 2>&1; true' \
         | tee "$RES_DIR/run_resmgr.txt"
 
-    say "4. slog2 records from towerwatch"
-    qssh 'slog2info -b towerwatch 2>/dev/null | tail -15' | tee "$RES_DIR/slog2.txt"
+    logs
+}
 
-    qssh 'cat /tmp/protect.csv' > "$RES_DIR/protect.csv"
-    qssh 'cat /tmp/observe.csv' > "$RES_DIR/observe.csv"
+# slog2 records and the CSV timelines from the target (also run on its own).
+logs() {
+    mkdir -p "$RES_DIR"
+    say "4. slog2 records from towerwatch"
+    qssh 'slog2info -b towerwatch 2>/dev/null | tail -15; true' | tee "$RES_DIR/slog2.txt"
+
+    qssh 'cat /tmp/protect.csv' > "$RES_DIR/protect.csv" || true
+    qssh 'cat /tmp/observe.csv' > "$RES_DIR/observe.csv" || true
     say "Results in $RES_DIR"
     ls -l "$RES_DIR"
 }
@@ -266,8 +272,9 @@ case "${1:-status}" in
     image) image ;;
     boot) boot ;;
     run) run_demo ;;
+    logs) logs ;;
     all) build && image && boot && run_demo ;;
     stop) stop_vm ;;
     status) status ;;
-    *) echo "usage: $0 setup|install|build|image|boot|run|all|stop|status"; exit 2 ;;
+    *) echo "usage: $0 setup|install|build|image|boot|run|logs|all|stop|status"; exit 2 ;;
 esac
