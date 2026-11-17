@@ -32,8 +32,8 @@ RES_DIR=$WORK/results
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR=$REPO_DIR/build/qnx/gcc_ntox86_64
 SSH_KEY=$HOME/.ssh/qnx_vm
-SSH_PORT=2222
-export QNX_SSH_PORT=$SSH_PORT
+SSH_PORT=${QNX_SSH_PORT:-10022}   # 2222 is taken in Cloud Shell
+
 
 say() { printf '\n== %s\n' "$*"; }
 
